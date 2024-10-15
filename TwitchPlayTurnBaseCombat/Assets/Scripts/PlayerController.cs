@@ -9,6 +9,9 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int switchCooldown = 3;
     [SerializeField] private int maxHealth = 100;
     [SerializeField] private Vector2Int initialFacingDirection = Vector2Int.right;
+    [SerializeField] private SpriteRenderer playerSprite;
+    [SerializeField] private Animator animator; // Attack功能, PlayDeathAnimation功能都需要动画
+    [SerializeField] private GameOverPanel gameOverPanel;
 
     private Vector2Int gridPosition;
     private Vector2Int facingDirection;
@@ -16,7 +19,6 @@ public class PlayerController : MonoBehaviour
     private int currentSwitchCooldown = 0;
     private int currentHealth;
 
-    private Animator animator;
     private SpriteRenderer spriteRenderer;
 
     private void Start()
@@ -32,6 +34,7 @@ public class PlayerController : MonoBehaviour
 
     public void PerformAction(string action)
     {
+        Debug.Log($"Performing action: {action}");
         switch (action)
         {
             case "MoveLeft":
@@ -59,15 +62,17 @@ public class PlayerController : MonoBehaviour
 
     private void Move(Vector2Int direction)
     {
+        Debug.Log($"Move called. Direction: {direction}, Current position: {gridPosition}, Current facing: {facingDirection}");
+
         Vector2Int newPosition = gridPosition + direction;
         if (GridManager.Instance.CanMoveTo(newPosition))
         {
             Vector2Int oldPosition = gridPosition;
             gridPosition = newPosition;
-            facingDirection = direction;
             GridManager.Instance.MoveEntity(oldPosition, gridPosition, GridManager.CellType.Player);
             StartCoroutine(MoveAnimation(GridManager.Instance.GridToWorldPosition(gridPosition)));
-            //UpdateFacingDirection();
+
+            Debug.Log($"Moved to: {gridPosition}, Facing direction remains: {facingDirection}");
         }
         else if (GridManager.Instance.GetCellType(newPosition) == GridManager.CellType.Enemy)
         {
@@ -80,26 +85,64 @@ public class PlayerController : MonoBehaviour
                 Debug.Log($"Switch on cooldown. {currentSwitchCooldown} turns remaining.");
             }
         }
+        else
+        {
+            Debug.Log($"Cannot move to {newPosition}. Cell type: {GridManager.Instance.GetCellType(newPosition)}");
+        }
     }
 
     private void Turn()
     {
-        facingDirection = -facingDirection; // 反转方向
-        UpdateFacingDirection();
+        facingDirection = -facingDirection;
+        UpdateFacingDirection(facingDirection);
         Debug.Log("Player turned around");
+    }
+
+    public void UpdateFacingDirection(Vector2Int newDirection)
+    {
+        if (newDirection != Vector2Int.zero)
+        {
+            facingDirection = newDirection;
+            Debug.Log($"Facing direction updated to: {facingDirection}");
+            UpdateSpriteRotation();
+        }
+    }
+
+    private void UpdateSpriteRotation()
+    {
+        if (playerSprite != null)
+        {
+            if (facingDirection.x < 0)
+            {
+                playerSprite.transform.rotation = Quaternion.Euler(0, 180, 0);
+            }
+            else if (facingDirection.x > 0)
+            {
+                playerSprite.transform.rotation = Quaternion.Euler(0, 0, 0);
+            }
+        }
+        else
+        {
+            Debug.LogWarning("Player sprite reference is missing!");
+        }
     }
 
     private void Wait()
     {
-        // Do nothing, just wait for a turn
         Debug.Log("Player waited for a turn");
     }
 
     private void Attack()
     {
+        Debug.Log($"Attack method called. Current position: {gridPosition}, Facing direction: {facingDirection}");
+
         if (currentAttackCooldown <= 0)
         {
-            Vector2Int attackPosition = gridPosition + facingDirection;
+            Vector2Int attackPosition = GetAttackPosition();
+
+            Debug.Log($"Calculated attack position: {attackPosition}");
+            Debug.Log($"Cell type at attack position: {GridManager.Instance.GetCellType(attackPosition)}");
+
             if (GridManager.Instance.GetCellType(attackPosition) == GridManager.CellType.Enemy)
             {
                 EnemyController enemy = FindEnemyAt(attackPosition);
@@ -110,16 +153,41 @@ public class PlayerController : MonoBehaviour
                     animator.SetTrigger("Attack");
                     currentAttackCooldown = attackCooldown;
                 }
+                else
+                {
+                    Debug.Log("Enemy cell detected but no EnemyController found.");
+                }
             }
             else
             {
-                Debug.Log("No enemy in range to attack");
+                Debug.Log($"No enemy at attack position. Cell type: {GridManager.Instance.GetCellType(attackPosition)}");
             }
         }
         else
         {
             Debug.Log($"Attack on cooldown. {currentAttackCooldown} turns remaining.");
         }
+    }
+
+    private Vector2Int GetAttackPosition()
+    {
+        Vector2Int frontPosition = gridPosition + facingDirection;
+        Debug.Log($"Calculating attack position. Front position: {frontPosition}");
+
+        if (GridManager.Instance.GetCellType(frontPosition) == GridManager.CellType.Enemy)
+        {
+            Debug.Log($"Enemy found at front position: {frontPosition}");
+            return frontPosition;
+        }
+
+        if (GridManager.Instance.GetCellType(gridPosition) == GridManager.CellType.Enemy)
+        {
+            Debug.Log($"Enemy found at current position: {gridPosition}");
+            return gridPosition;
+        }
+
+        Debug.Log($"No enemy found. Returning front position: {frontPosition}");
+        return frontPosition;
     }
 
     private EnemyController FindEnemyAt(Vector2Int position)
@@ -143,22 +211,19 @@ public class PlayerController : MonoBehaviour
             Vector2Int playerOldPosition = gridPosition;
             Vector2Int enemyOldFacingDirection = enemy.GetFacingDirection();
 
-            // 交换位置
             gridPosition = enemyPosition;
             enemy.SetPosition(playerOldPosition);
 
-            // 更新网格
             GridManager.Instance.SetCellType(playerOldPosition, GridManager.CellType.Enemy);
             GridManager.Instance.SetCellType(enemyPosition, GridManager.CellType.Player);
 
-            // 更新玩家位置
             StartCoroutine(MoveAnimation(GridManager.Instance.GridToWorldPosition(gridPosition)));
 
-            // 更新敌人位置和朝向
             enemy.UpdatePositionAndDirection(playerOldPosition, enemyOldFacingDirection);
 
-            // 重置 Switch 冷却时间
             currentSwitchCooldown = switchCooldown;
+
+            enemy.TakeDamage(attackDamage/2);
 
             Debug.Log("Player switched positions with enemy");
         }
@@ -172,13 +237,13 @@ public class PlayerController : MonoBehaviour
 
     private IEnumerator MoveAnimation(Vector3 targetPosition)
     {
-        animator.SetBool("IsMoving", true);
+        //animator.SetBool("IsMoving", true);
         while (transform.position != targetPosition)
         {
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
             yield return null;
         }
-        animator.SetBool("IsMoving", false);
+        //animator.SetBool("IsMoving", false);
         UpdatePosition();
     }
 
@@ -190,7 +255,6 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateFacingDirection()
     {
-        // 使用 RotationY 旋转
         if (facingDirection.x < 0)
         {
             transform.rotation = Quaternion.Euler(0, 180, 0);
@@ -207,6 +271,8 @@ public class PlayerController : MonoBehaviour
         GameManager.Instance.UpdateHealthUI();
         if (currentHealth <= 0)
         {
+            currentHealth = Mathf.Max(0, currentHealth - damage);
+            GameManager.Instance.UpdateHealthUI();
             Die();
         }
     }
@@ -214,7 +280,37 @@ public class PlayerController : MonoBehaviour
     private void Die()
     {
         Debug.Log("Player has died!");
-        // TODO: Implement player death logic (e.g., game over screen, restart level)
+        GridManager.Instance.SetCellType(gridPosition, GridManager.CellType.Empty);
+
+        // 禁用玩家控制
+        this.enabled = false;
+
+        // 播放死亡动画
+        if (animator != null)
+        {
+            animator.SetTrigger("Die");
+        }
+
+        // 显示游戏结束面板
+        if (gameOverPanel != null)
+        {
+            StartCoroutine(ShowGameOverPanelAfterAnimation());
+        }
+        else
+        {
+            Debug.LogError("GameOverPanel reference is missing!");
+        }
+    }
+
+    private IEnumerator ShowGameOverPanelAfterAnimation()
+    {
+        // 等待死亡动画播放完毕
+        if (animator != null)
+        {
+            yield return new WaitForSeconds(animator.GetCurrentAnimatorStateInfo(0).length);
+        }
+
+        gameOverPanel.Show();
     }
 
     public float GetHealth() => currentHealth;

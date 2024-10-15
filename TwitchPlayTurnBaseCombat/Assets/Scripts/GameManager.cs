@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 public class GameManager : MonoBehaviour
 {
@@ -15,11 +16,11 @@ public class GameManager : MonoBehaviour
     private bool isCountdownActive = false;
     private Dictionary<KeyCode, string> keyToAction = new Dictionary<KeyCode, string>
     {
-        {KeyCode.A, "MoveLeft"},
-        {KeyCode.D, "MoveRight"},
-        {KeyCode.W, "Turn"},
-        {KeyCode.S, "Wait"},
-        {KeyCode.Space, "Attack"}
+        {KeyCode.A, "A"},
+        {KeyCode.D, "D"},
+        {KeyCode.W, "W"},
+        {KeyCode.S, "S"},
+        {KeyCode.J, "J"}
     };
     private Dictionary<string, int> actionCounts;
     private int totalActionCount = 0;
@@ -76,8 +77,12 @@ public class GameManager : MonoBehaviour
                 if (actionCounts.ContainsKey(action))
                 {
                     actionCounts[action]++;
-                    UIManager.Instance.UpdateActionCount(action, actionCounts[action]);
+                    totalActionCount++;
+                    UIManager.Instance.UpdateActionCount(action, actionCounts[action], totalActionCount);
                     UIManager.Instance.HighlightButton(action);
+
+                    // Debug information
+                    Debug.Log($"Action {action} pressed. Count: {actionCounts[action]}. Total actions: {totalActionCount}");
                 }
             }
         }
@@ -136,7 +141,16 @@ public class GameManager : MonoBehaviour
         isTurnActive = true;
         string selectedAction = GetMostPressedAction();
         Debug.Log($"Selected action: {selectedAction}");
-        player.PerformAction(selectedAction);
+
+        // Show the action result panel
+        UIManager.Instance.ShowActionResult(selectedAction);
+
+        // Wait for the panel to be displayed
+        yield return new WaitForSeconds(UIManager.Instance.GetActionResultDisplayDuration());
+
+        // Convert the selected action back to the format expected by PlayerController
+        string playerAction = ConvertActionToPlayerAction(selectedAction);
+        player.PerformAction(playerAction);
 
         yield return new WaitForSeconds(1f); // Wait for action animation
         isTurnActive = false;
@@ -159,8 +173,8 @@ public class GameManager : MonoBehaviour
 
     private void ResetActionCounts()
     {
-        List<string> keys = new List<string>(actionCounts.Keys);
-        foreach (var action in keys)
+        // Use ToList() to create a copy of the keys to avoid modification during enumeration
+        foreach (var action in actionCounts.Keys.ToList())
         {
             actionCounts[action] = 0;
         }
@@ -170,19 +184,26 @@ public class GameManager : MonoBehaviour
 
     private string GetMostPressedAction()
     {
-        string mostPressedAction = "Wait";
-        int maxCount = -1;
+        return actionCounts.OrderByDescending(kvp => kvp.Value).First().Key;
+    }
 
-        foreach (var kvp in actionCounts)
+    private string ConvertActionToPlayerAction(string action)
+    {
+        switch (action)
         {
-            if (kvp.Value > maxCount)
-            {
-                mostPressedAction = kvp.Key;
-                maxCount = kvp.Value;
-            }
+            case "A":
+                return "MoveLeft";
+            case "D":
+                return "MoveRight";
+            case "W":
+                return "Turn";
+            case "S":
+                return "Wait";
+            case "J":
+                return "Attack";
+            default:
+                return "Wait";
         }
-
-        return mostPressedAction;
     }
 
     public void UpdateHealthUI()
@@ -214,79 +235,63 @@ public class GameManager : MonoBehaviour
 
     public void OnChatMessage(string PCharacter, string PMessage)
     {
-        if (PMessage.Contains("!a"))
+        if (isCountdownActive)
         {
-            // Simulate pressing the A key (Move Left)
-            PerformChatAction(KeyCode.A);
-        }
-
-        if (PMessage.Contains("!aa"))
-        {
-            // Simulate pressing the A key (Move Left)
-            PerformChatAction(KeyCode.A);
-        }
-
-        if (PMessage.Contains("!d"))
-        {
-            // Simulate pressing the D key (Move Right)
-            PerformChatAction(KeyCode.D);
-        }
-
-        if (PMessage.Contains("!dd"))
-        {
-            // Simulate pressing the D key (Move Right)
-            PerformChatAction(KeyCode.D);
-        }
-
-        if (PMessage.Contains("!w"))
-        {
-            // Simulate pressing the W key (Turn)
-            PerformChatAction(KeyCode.W);
-        }
-
-        if (PMessage.Contains("!ww"))
-        {
-            // Simulate pressing the W key (Turn)
-            PerformChatAction(KeyCode.W);
-        }
-
-        if (PMessage.Contains("!s"))
-        {
-            // Simulate pressing the S key (Wait)
-            PerformChatAction(KeyCode.S);
-        }
-
-        if (PMessage.Contains("!ss"))
-        {
-            // Simulate pressing the S key (Wait)
-            PerformChatAction(KeyCode.S);
-        }
-
-        if (PMessage.Contains("!j"))
-        {
-            // Simulate pressing the Space key (Attack)
-            PerformChatAction(KeyCode.J);
-        }
-
-        if (PMessage.Contains("!jj"))
-        {
-            // Simulate pressing the Space key (Attack)
-            PerformChatAction(KeyCode.J);
+            if (PMessage.Contains("!a"))
+            {
+                PerformChatAction(KeyCode.A);
+            }
+            if (PMessage.Contains("!aa"))
+            {
+                PerformChatAction(KeyCode.A);
+            }
+            if (PMessage.Contains("!d"))
+            {
+                PerformChatAction(KeyCode.D);
+            }
+            if (PMessage.Contains("!dd"))
+            {
+                PerformChatAction(KeyCode.D);
+            }
+            if (PMessage.Contains("!w"))
+            {
+                PerformChatAction(KeyCode.W);
+            }
+            if (PMessage.Contains("!ww"))
+            {
+                PerformChatAction(KeyCode.W);
+            }
+            if (PMessage.Contains("!s"))
+            {
+                PerformChatAction(KeyCode.S);
+            }
+            if (PMessage.Contains("!ss"))
+            {
+                PerformChatAction(KeyCode.S);
+            }
+            if (PMessage.Contains("!j"))
+            {
+                PerformChatAction(KeyCode.Space);
+            }
+            if (PMessage.Contains("!jj"))
+            {
+                PerformChatAction(KeyCode.Space);
+            }
         }
     }
 
     private void PerformChatAction(KeyCode key)
     {
-        // This simulates the same logic as if the player pressed the key.
         if (keyToAction.TryGetValue(key, out string action))
         {
             if (actionCounts.ContainsKey(action))
             {
                 actionCounts[action]++;
-                UIManager.Instance.UpdateActionCount(action, actionCounts[action]);
+                totalActionCount++;
+                UIManager.Instance.UpdateActionCount(action, actionCounts[action], totalActionCount);
                 UIManager.Instance.HighlightButton(action);
 
-                Debug.Log($"Chat command executed: {action}");
+                Debug.Log($"Chat command executed: {action}. Count: {actionCounts[action]}. Total actions: {totalActionCount}");
             }
         }
     }

@@ -3,7 +3,6 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 
 public class UIManager : MonoBehaviour
 {
@@ -16,9 +15,12 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI turnCountdownText;
     [SerializeField] private GameObject actionPanel;
     [SerializeField] private Button[] actionButtons;
-    [SerializeField] private TextMeshProUGUI[] actionCountTexts;
+    [SerializeField] private Slider[] actionCountSliders; // New array for sliders
+    [SerializeField] private ActionResultPanel actionResultPanel;
 
-    private Dictionary<string, TextMeshProUGUI> actionTextMap = new Dictionary<string, TextMeshProUGUI>();
+
+    private Dictionary<string, Slider> actionSliderMap = new Dictionary<string, Slider>();
+    private int totalActionCount = 0;
 
     private void Awake()
     {
@@ -30,16 +32,15 @@ public class UIManager : MonoBehaviour
         {
             Destroy(gameObject);
         }
-
-        InitializeActionTextMap();
+        InitializeActionSliderMap();
     }
 
-    private void InitializeActionTextMap()
+    private void InitializeActionSliderMap()
     {
-        for (int i = 0; i < actionButtons.Length; i++)
+        string[] actionKeys = { "A", "D", "W", "S", "J" };
+        for (int i = 0; i < actionCountSliders.Length; i++)
         {
-            string actionName = actionButtons[i].name.Replace("Button", "");
-            actionTextMap[actionName] = actionCountTexts[i];
+            actionSliderMap[actionKeys[i]] = actionCountSliders[i];
         }
     }
 
@@ -74,33 +75,52 @@ public class UIManager : MonoBehaviour
     public void ShowActionPanel(bool show)
     {
         actionPanel.SetActive(show);
-    }
-
-    public void UpdateActionCount(string action, int count)
-    {
-        if (actionTextMap.TryGetValue(action, out TextMeshProUGUI text))
+        if (!show)
         {
-            text.text = count.ToString();
+            ResetActionCounts();
         }
-        UpdateHighestCountColor();
     }
 
-    private void UpdateHighestCountColor()
+    public void UpdateActionCount(string action, int count, int totalCount)
     {
-        int maxCount = actionCountTexts.Max(text => int.Parse(text.text));
-        foreach (var text in actionCountTexts)
+        // First, update the max value for all sliders
+        UpdateSliderMaxValues(totalCount);
+
+        // Then, update the value for the specific action
+        if (actionSliderMap.TryGetValue(action, out Slider slider))
         {
-            text.color = int.Parse(text.text) == maxCount ? Color.red : Color.white;
+            slider.value = count;
+        }
+
+        // Debug information
+        Debug.Log($"Action {action} pressed. Count: {count}. Total actions: {totalCount}");
+    }
+
+    private void UpdateSliderMaxValues(int totalCount)
+    {
+        int maxValue = Mathf.Max(1, totalCount);
+        foreach (var slider in actionCountSliders)
+        {
+            slider.maxValue = maxValue;
+        }
+    }
+
+    private void UpdateSliderMaxValues()
+    {
+        foreach (var slider in actionCountSliders)
+        {
+            slider.maxValue = Mathf.Max(1, totalActionCount);
         }
     }
 
     public void ResetActionCounts()
     {
-        foreach (var text in actionCountTexts)
+        foreach (var slider in actionCountSliders)
         {
-            text.text = "0";
-            text.color = Color.black;
+            slider.value = 0;
+            slider.maxValue = 1;
         }
+        totalActionCount = 0;
     }
 
     public void HighlightButton(string action)
@@ -121,5 +141,22 @@ public class UIManager : MonoBehaviour
         button.image.color = Color.yellow;
         yield return new WaitForSeconds(0.1f);
         button.image.color = originalColor;
+    }
+
+    public void ShowActionResult(string action)
+    {
+        if (actionResultPanel != null)
+        {
+            actionResultPanel.ShowResult(action);
+        }
+        else
+        {
+            Debug.LogError("ActionResultPanel reference is missing in UIManager.");
+        }
+    }
+
+    public float GetActionResultDisplayDuration()
+    {
+        return actionResultPanel.GetDisplayDuration();
     }
 }
