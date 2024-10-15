@@ -211,4 +211,53 @@ public class GameManager : MonoBehaviour
     {
         return isTurnActive;
     }
+
+    public void OnChatMessage(string PCharacter, string PMessage)
+    {
+        if (PMessage.Contains("!a"))
+        {
+            // Simulate pressing the A key (Move Left)
+            PerformChatAction(KeyCode.A);
+        }
+
+        if (PMessage.Contains("!dd"))
+        {
+            // Simulate pressing the D key (Move Right)
+            PerformChatAction(KeyCode.D);
+        }
+
+        if (PMessage.Contains("!w"))
+        {
+            // Simulate pressing the W key (Turn)
+            PerformChatAction(KeyCode.W);
+        }
+
+        if (PMessage.Contains("!s"))
+        {
+            // Simulate pressing the S key (Wait)
+            PerformChatAction(KeyCode.S);
+        }
+
+        if (PMessage.Contains("!j"))
+        {
+            // Simulate pressing the Space key (Attack)
+            PerformChatAction(KeyCode.J);
+        }
+    }
+
+    private void PerformChatAction(KeyCode key)
+    {
+        // This simulates the same logic as if the player pressed the key.
+        if (keyToAction.TryGetValue(key, out string action))
+        {
+            if (actionCounts.ContainsKey(action))
+            {
+                actionCounts[action]++;
+                UIManager.Instance.UpdateActionCount(action, actionCounts[action]);
+                UIManager.Instance.HighlightButton(action);
+
+                Debug.Log($"Chat command executed: {action}");
+            }
+        }
+    }
 }
