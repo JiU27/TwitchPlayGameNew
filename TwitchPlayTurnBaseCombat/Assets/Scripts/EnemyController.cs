@@ -10,14 +10,17 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int spearDamage = 3;
     [SerializeField] private float moveSpeed = 3f;
     [SerializeField] private int maxHealth = 50;
-    [SerializeField] private Vector2Int initialFacingDirection = Vector2Int.left; // 可编辑的初始方向
+    [SerializeField] private Vector2Int initialFacingDirection = Vector2Int.left; 
+    [SerializeField] private Animator animator; // Attack功能, PlayDeathAnimation功能都需要动画
+    [SerializeField] private float deathAnimationDuration = 0.5f; // 死亡动画的持续时间
+    [SerializeField] private GameObject chargingIndicatorPrefab; 
+    [SerializeField] private Vector3 indicatorOffset = new Vector3(0, 1, 0); 
 
+    private GameObject currentChargingIndicator; 
     private Vector2Int gridPosition;
     private Vector2Int facingDirection;
     public bool isCharging = false;
     private int currentHealth;
-
-    private Animator animator;
     private SpriteRenderer spriteRenderer;
 
     private void Start()
@@ -25,7 +28,7 @@ public class EnemyController : MonoBehaviour
         animator = GetComponent<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         gridPosition = GridManager.Instance.WorldToGridPosition(transform.position);
-        facingDirection = initialFacingDirection; // 使用初始方向
+        facingDirection = initialFacingDirection; 
         currentHealth = maxHealth;
         UpdatePosition();
         UpdateFacingDirection();
@@ -104,13 +107,29 @@ public class EnemyController : MonoBehaviour
     private void StartCharging()
     {
         isCharging = true;
-        animator.SetTrigger("StartCharging");
         Debug.Log("Enemy started charging");
+
+        CreateChargingIndicator();
     }
 
-    private void Attack()
+    private void CreateChargingIndicator()
+    {
+        if (chargingIndicatorPrefab != null)
+        {
+            Vector3 indicatorPosition = transform.position + indicatorOffset;
+            currentChargingIndicator = Instantiate(chargingIndicatorPrefab, indicatorPosition, Quaternion.identity, transform);
+        }
+        else
+        {
+            Debug.LogWarning("Charging indicator prefab is not assigned!");
+        }
+    }
+
+    private void Attack()//敌人攻击
     {
         isCharging = false;
+        RemoveChargingIndicator(); // 移除蓄力指示器
+
         PlayerController player = FindObjectOfType<PlayerController>();
         if (player != null && IsPlayerInAttackRange(player.GetGridPosition()))
         {
@@ -122,6 +141,15 @@ public class EnemyController : MonoBehaviour
         else
         {
             Debug.Log("Player is not in attack range. Attack missed!");
+        }
+    }
+
+    private void RemoveChargingIndicator()
+    {
+        if (currentChargingIndicator != null)
+        {
+            Destroy(currentChargingIndicator);
+            currentChargingIndicator = null;
         }
     }
 
@@ -168,13 +196,13 @@ public class EnemyController : MonoBehaviour
 
     private IEnumerator MoveAnimation(Vector3 targetPosition)
     {
-        animator.SetBool("IsMoving", true);
+        //animator.SetBool("IsMoving", true);
         while (transform.position != targetPosition)
         {
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
             yield return null;
         }
-        animator.SetBool("IsMoving", false);
+        //animator.SetBool("IsMoving", false);
         UpdatePosition();
     }
 
@@ -186,7 +214,6 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateFacingDirection()
     {
-        // 使用 RotationY 旋转
         if (facingDirection.x < 0)
         {
             transform.rotation = Quaternion.Euler(0, 180, 0);
@@ -195,7 +222,6 @@ public class EnemyController : MonoBehaviour
         {
             transform.rotation = Quaternion.Euler(0, 0, 0);
         }
-        // 如果需要处理上下方向，可以在这里添加逻辑
     }
 
     public void TakeDamage(int damage)
@@ -203,6 +229,7 @@ public class EnemyController : MonoBehaviour
         currentHealth = Mathf.Max(0, currentHealth - damage);
         if (currentHealth <= 0)
         {
+            currentHealth = Mathf.Max(0, currentHealth - damage);
             Die();
         }
     }
@@ -210,7 +237,30 @@ public class EnemyController : MonoBehaviour
     private void Die()
     {
         Debug.Log("Enemy has died!");
+        RemoveChargingIndicator();
         GridManager.Instance.SetCellType(gridPosition, GridManager.CellType.Empty);
+
+        // 播放死亡动画
+        StartCoroutine(PlayDeathAnimation());
+    }
+
+    private IEnumerator PlayDeathAnimation()
+    {
+        // 禁用敌人的其他行为（如果有的话）
+
+        if (animator != null)
+        {
+            animator.SetTrigger("Die");
+
+            // 等待动画播放完毕
+            yield return new WaitForSeconds(deathAnimationDuration);
+        }
+        else
+        {
+            Debug.LogWarning("Animator component is missing on the enemy!");
+            yield return new WaitForSeconds(0.5f); 
+        }
+
         Destroy(gameObject);
     }
 
