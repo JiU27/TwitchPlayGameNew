@@ -220,6 +220,18 @@ public class GameManager : MonoBehaviour
             PerformChatAction(KeyCode.A);
         }
 
+        if (PMessage.Contains("!aa"))
+        {
+            // Simulate pressing the A key (Move Left)
+            PerformChatAction(KeyCode.A);
+        }
+
+        if (PMessage.Contains("!d"))
+        {
+            // Simulate pressing the D key (Move Right)
+            PerformChatAction(KeyCode.D);
+        }
+
         if (PMessage.Contains("!dd"))
         {
             // Simulate pressing the D key (Move Right)
@@ -232,13 +244,31 @@ public class GameManager : MonoBehaviour
             PerformChatAction(KeyCode.W);
         }
 
+        if (PMessage.Contains("!ww"))
+        {
+            // Simulate pressing the W key (Turn)
+            PerformChatAction(KeyCode.W);
+        }
+
         if (PMessage.Contains("!s"))
         {
             // Simulate pressing the S key (Wait)
             PerformChatAction(KeyCode.S);
         }
 
+        if (PMessage.Contains("!ss"))
+        {
+            // Simulate pressing the S key (Wait)
+            PerformChatAction(KeyCode.S);
+        }
+
         if (PMessage.Contains("!j"))
+        {
+            // Simulate pressing the Space key (Attack)
+            PerformChatAction(KeyCode.J);
+        }
+
+        if (PMessage.Contains("!jj"))
         {
             // Simulate pressing the Space key (Attack)
             PerformChatAction(KeyCode.J);
