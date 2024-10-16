@@ -271,11 +271,11 @@ public class GameManager : MonoBehaviour
             }
             if (PMessage.Contains("!j"))
             {
-                PerformChatAction(KeyCode.Space);
+                PerformChatAction(KeyCode.J);
             }
             if (PMessage.Contains("!jj"))
             {
-                PerformChatAction(KeyCode.Space);
+                PerformChatAction(KeyCode.J);
             }
         }
     }
