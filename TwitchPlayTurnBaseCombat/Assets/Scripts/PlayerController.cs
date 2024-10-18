@@ -12,6 +12,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private SpriteRenderer playerSprite;
     [SerializeField] private Animator animator; // Attack功能, PlayDeathAnimation功能都需要动画
     [SerializeField] private GameOverPanel gameOverPanel;
+    [SerializeField] private Transform spriteTransform;
 
     private Vector2Int gridPosition;
     private Vector2Int facingDirection;
@@ -20,6 +21,8 @@ public class PlayerController : MonoBehaviour
     private int currentHealth;
 
     private SpriteRenderer spriteRenderer;
+
+    [SerializeField] private float switchAnimationDuration = 0.5f;
 
     private void Start()
     {
@@ -94,38 +97,10 @@ public class PlayerController : MonoBehaviour
     private void Turn()
     {
         facingDirection = -facingDirection;
-        UpdateFacingDirection(facingDirection);
+        UpdateFacingDirection();
         Debug.Log("Player turned around");
     }
 
-    public void UpdateFacingDirection(Vector2Int newDirection)
-    {
-        if (newDirection != Vector2Int.zero)
-        {
-            facingDirection = newDirection;
-            Debug.Log($"Facing direction updated to: {facingDirection}");
-            UpdateSpriteRotation();
-        }
-    }
-
-    private void UpdateSpriteRotation()
-    {
-        if (playerSprite != null)
-        {
-            if (facingDirection.x < 0)
-            {
-                playerSprite.transform.rotation = Quaternion.Euler(0, 180, 0);
-            }
-            else if (facingDirection.x > 0)
-            {
-                playerSprite.transform.rotation = Quaternion.Euler(0, 0, 0);
-            }
-        }
-        else
-        {
-            Debug.LogWarning("Player sprite reference is missing!");
-        }
-    }
 
     private void Wait()
     {
@@ -148,9 +123,9 @@ public class PlayerController : MonoBehaviour
                 EnemyController enemy = FindEnemyAt(attackPosition);
                 if (enemy != null)
                 {
+                    animator.SetTrigger("Attack");
                     enemy.TakeDamage(attackDamage);
                     Debug.Log($"Attacked enemy for {attackDamage} damage!");
-                    animator.SetTrigger("Attack");
                     currentAttackCooldown = attackCooldown;
                 }
                 else
@@ -160,6 +135,7 @@ public class PlayerController : MonoBehaviour
             }
             else
             {
+                animator.SetTrigger("Attack");
                 Debug.Log($"No enemy at attack position. Cell type: {GridManager.Instance.GetCellType(attackPosition)}");
             }
         }
@@ -208,25 +184,66 @@ public class PlayerController : MonoBehaviour
         EnemyController enemy = FindEnemyAt(enemyPosition);
         if (enemy != null)
         {
+
             Vector2Int playerOldPosition = gridPosition;
             Vector2Int enemyOldFacingDirection = enemy.GetFacingDirection();
 
-            gridPosition = enemyPosition;
-            enemy.SetPosition(playerOldPosition);
-
-            GridManager.Instance.SetCellType(playerOldPosition, GridManager.CellType.Enemy);
-            GridManager.Instance.SetCellType(enemyPosition, GridManager.CellType.Player);
-
-            StartCoroutine(MoveAnimation(GridManager.Instance.GridToWorldPosition(gridPosition)));
-
-            enemy.UpdatePositionAndDirection(playerOldPosition, enemyOldFacingDirection);
+            // 开始交换位置动画
+            StartCoroutine(SwitchPositionAnimation(enemy, playerOldPosition, enemyPosition));
 
             currentSwitchCooldown = switchCooldown;
 
-            enemy.TakeDamage(attackDamage/2);
-
             Debug.Log("Player switched positions with enemy");
         }
+    }
+
+    private IEnumerator SwitchPositionAnimation(EnemyController enemy, Vector2Int playerOldPosition, Vector2Int enemyOldPosition)
+    {
+        // 触发交换位置动画
+        if (animator != null)
+        {
+            animator.SetTrigger("Switch");
+        }
+
+        // 计算中间点
+        Vector3 midPoint = (GridManager.Instance.GridToWorldPosition(playerOldPosition) +
+                            GridManager.Instance.GridToWorldPosition(enemyOldPosition)) / 2;
+
+        // 玩家移动到中间点
+        yield return StartCoroutine(MoveToPosition(midPoint));
+
+        // 更新网格位置
+        gridPosition = enemyOldPosition;
+        enemy.SetPosition(playerOldPosition);
+
+        GridManager.Instance.SetCellType(playerOldPosition, GridManager.CellType.Enemy);
+        GridManager.Instance.SetCellType(enemyOldPosition, GridManager.CellType.Player);
+
+        // 玩家从中间点移动到最终位置
+        yield return StartCoroutine(MoveToPosition(GridManager.Instance.GridToWorldPosition(gridPosition)));
+
+        // 敌人更新位置和方向
+        enemy.UpdatePositionAndDirection(playerOldPosition, enemy.GetFacingDirection());
+
+        // 对敌人造成伤害
+        //enemy.TakeDamage(attackDamage / 2);
+
+        UpdatePosition();
+    }
+
+    private IEnumerator MoveToPosition(Vector3 targetPosition)
+    {
+        float elapsedTime = 0;
+        Vector3 startingPosition = transform.position;
+
+        while (elapsedTime < switchAnimationDuration)
+        {
+            transform.position = Vector3.Lerp(startingPosition, targetPosition, elapsedTime / switchAnimationDuration);
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.position = targetPosition;
     }
 
     private void DecreaseCooldowns()
@@ -255,13 +272,20 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateFacingDirection()
     {
-        if (facingDirection.x < 0)
+        if (spriteTransform != null)
         {
-            transform.rotation = Quaternion.Euler(0, 180, 0);
+            if (facingDirection.x < 0)
+            {
+                spriteTransform.localScale = new Vector3(-3.7f, 3.7f, 3.7f);
+            }
+            else if (facingDirection.x > 0)
+            {
+                spriteTransform.localScale = new Vector3(3.7f, 3.7f, 3.7f);
+            }
         }
-        else if (facingDirection.x > 0)
+        else
         {
-            transform.rotation = Quaternion.Euler(0, 0, 0);
+            Debug.LogWarning("Sprite transform reference is missing!");
         }
     }
 

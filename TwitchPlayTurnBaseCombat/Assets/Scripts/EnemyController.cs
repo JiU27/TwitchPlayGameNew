@@ -14,19 +14,32 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Animator animator; // Attack功能, PlayDeathAnimation功能都需要动画
     [SerializeField] private float deathAnimationDuration = 0.5f; // 死亡动画的持续时间
     [SerializeField] private GameObject chargingIndicatorPrefab; 
-    [SerializeField] private Vector3 indicatorOffset = new Vector3(0, 1, 0); 
+    [SerializeField] private Vector3 indicatorOffset = new Vector3(0, 1, 0);
+    [SerializeField] private Transform spriteTransform;
 
     private GameObject currentChargingIndicator; 
     private Vector2Int gridPosition;
     private Vector2Int facingDirection;
     public bool isCharging = false;
     private int currentHealth;
+
+    //[SerializeField] private Sprite normalSprite;
+    //[SerializeField] private Sprite chargingSprite;
     private SpriteRenderer spriteRenderer;
+
+    [SerializeField] private float switchAnimationDuration = 0.5f;
 
     private void Start()
     {
         animator = GetComponent<Animator>();
-        spriteRenderer = GetComponent<SpriteRenderer>();
+
+        spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        if (spriteRenderer == null)
+        {
+            Debug.LogError("SpriteRenderer not found on enemy or its children!");
+        }
+        SetNormalSprite();
+
         gridPosition = GridManager.Instance.WorldToGridPosition(transform.position);
         facingDirection = initialFacingDirection; 
         currentHealth = maxHealth;
@@ -106,9 +119,9 @@ public class EnemyController : MonoBehaviour
 
     private void StartCharging()
     {
+        SetChargingSprite();
         isCharging = true;
         Debug.Log("Enemy started charging");
-
         CreateChargingIndicator();
     }
 
@@ -127,15 +140,16 @@ public class EnemyController : MonoBehaviour
 
     private void Attack()//敌人攻击
     {
+        animator.SetTrigger("Attack");
         isCharging = false;
-        RemoveChargingIndicator(); // 移除蓄力指示器
+        RemoveChargingIndicator();
+        SetNormalSprite(); // 攻击后恢复正常 sprite
 
         PlayerController player = FindObjectOfType<PlayerController>();
         if (player != null && IsPlayerInAttackRange(player.GetGridPosition()))
         {
             int damage = type == EnemyType.Sword ? swordDamage : spearDamage;
             Debug.Log($"Enemy attacked player for {damage} damage!");
-            animator.SetTrigger("Attack");
             player.TakeDamage(damage);
         }
         else
@@ -214,13 +228,20 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateFacingDirection()
     {
-        if (facingDirection.x < 0)
+        if (spriteTransform != null)
         {
-            transform.rotation = Quaternion.Euler(0, 180, 0);
+            if (facingDirection.x < 0)
+            {
+                spriteTransform.localScale = new Vector3(-4, 4, 4);
+            }
+            else if (facingDirection.x > 0)
+            {
+                spriteTransform.localScale = new Vector3(4, 4, 4);
+            }
         }
-        else if (facingDirection.x > 0)
+        else
         {
-            transform.rotation = Quaternion.Euler(0, 0, 0);
+            Debug.LogWarning("Sprite transform reference is missing!");
         }
     }
 
@@ -238,6 +259,7 @@ public class EnemyController : MonoBehaviour
     {
         Debug.Log("Enemy has died!");
         RemoveChargingIndicator();
+        SetNormalSprite(); // 确保在死亡时恢复正常 sprite
         GridManager.Instance.SetCellType(gridPosition, GridManager.CellType.Empty);
 
         // 播放死亡动画
@@ -278,8 +300,56 @@ public class EnemyController : MonoBehaviour
 
     public void UpdatePositionAndDirection(Vector2Int newPosition, Vector2Int newFacingDirection)
     {
+        StartCoroutine(SwitchPositionAnimation(newPosition, newFacingDirection));
+        SetNormalSprite(); // 确保在位置更新后恢复正常 sprite
+    }
+
+    private IEnumerator SwitchPositionAnimation(Vector2Int newPosition, Vector2Int newFacingDirection)
+    {
+        Vector3 startPosition = transform.position;
+        Vector3 targetPosition = GridManager.Instance.GridToWorldPosition(newPosition);
+        Vector3 midPoint = (startPosition + targetPosition) / 2;
+
+        // 移动到中间点
+        yield return StartCoroutine(MoveToPosition(midPoint));
+
+        // 移动到最终位置
+        yield return StartCoroutine(MoveToPosition(targetPosition));
+
+        // 更新位置和方向
         SetPosition(newPosition);
         facingDirection = newFacingDirection;
         UpdateFacingDirection();
+    }
+
+    private IEnumerator MoveToPosition(Vector3 targetPosition)
+    {
+        float elapsedTime = 0;
+        Vector3 startingPosition = transform.position;
+
+        while (elapsedTime < switchAnimationDuration)
+        {
+            transform.position = Vector3.Lerp(startingPosition, targetPosition, elapsedTime / switchAnimationDuration);
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.position = targetPosition;
+    }
+
+    private void SetNormalSprite()
+    {
+        if (animator != null)
+        {
+            animator.SetTrigger("Idle");
+        }
+    }
+
+    private void SetChargingSprite()
+    {
+        if (animator != null)
+        {
+            animator.SetTrigger("Charge");
+        }
     }
 }
