@@ -9,7 +9,8 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] private float turnCountdownDuration = 5f;
     [SerializeField] private PlayerController player;
-    [SerializeField] private EnemyController enemy;
+    [SerializeField] private List<EnemyController> enemies;
+    [SerializeField] private GameWinPanel gameWinPanel;
 
     private bool isPlayerTurn = true;
     private bool isTurnActive = false;
@@ -40,7 +41,7 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
-        if (player == null || enemy == null || UIManager.Instance == null)
+        if (player == null || enemies.Count == 0 || UIManager.Instance == null)
         {
             Debug.LogError("GameManager: Essential components are missing!");
             return;
@@ -80,8 +81,6 @@ public class GameManager : MonoBehaviour
                     totalActionCount++;
                     UIManager.Instance.UpdateActionCount(action, actionCounts[action], totalActionCount);
                     UIManager.Instance.HighlightButton(action);
-
-                    // Debug information
                     Debug.Log($"Action {action} pressed. Count: {actionCounts[action]}. Total actions: {totalActionCount}");
                 }
             }
@@ -90,13 +89,12 @@ public class GameManager : MonoBehaviour
 
     private void UpdateUI()
     {
-        if (player != null && enemy != null && UIManager.Instance != null)
+        if (player != null && enemies.Count > 0 && UIManager.Instance != null)
         {
             float playerHealth = player.GetHealth();
             float playerMaxHealth = player.GetMaxHealth();
-            float enemyHealth = enemy.GetHealth();
-            float enemyMaxHealth = enemy.GetMaxHealth();
-            UIManager.Instance.UpdateHealthBars(playerHealth, playerMaxHealth, enemyHealth, enemyMaxHealth);
+            UIManager.Instance.UpdatePlayerHealthBar(playerHealth, playerMaxHealth);
+            UIManager.Instance.UpdateEnemyHealthBars(enemies);
 
             int attackCooldown = player.GetAttackCooldown();
             int switchCooldown = player.GetSwitchCooldown();
@@ -142,13 +140,9 @@ public class GameManager : MonoBehaviour
         string selectedAction = GetMostPressedAction();
         Debug.Log($"Selected action: {selectedAction}");
 
-        // Show the action result panel
         UIManager.Instance.ShowActionResult(selectedAction);
-
-        // Wait for the panel to be displayed
         yield return new WaitForSeconds(UIManager.Instance.GetActionResultDisplayDuration());
 
-        // Convert the selected action back to the format expected by PlayerController
         string playerAction = ConvertActionToPlayerAction(selectedAction);
         player.PerformAction(playerAction);
 
@@ -164,16 +158,21 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
 
         isTurnActive = true;
-        enemy.PerformTurn();
+        foreach (var enemy in enemies.ToList()) // Use ToList to allow for enemy removal during iteration
+        {
+            if (enemy != null && enemy.gameObject.activeSelf)
+            {
+                enemy.PerformTurn();
+                yield return new WaitForSeconds(1f); // Wait between enemy actions
+            }
+        }
 
-        yield return new WaitForSeconds(1f); // Wait for enemy action
         isTurnActive = false;
         Debug.Log("Enemy turn ended");
     }
 
     private void ResetActionCounts()
     {
-        // Use ToList() to create a copy of the keys to avoid modification during enumeration
         foreach (var action in actionCounts.Keys.ToList())
         {
             actionCounts[action] = 0;
@@ -191,30 +190,23 @@ public class GameManager : MonoBehaviour
     {
         switch (action)
         {
-            case "A":
-                return "MoveLeft";
-            case "D":
-                return "MoveRight";
-            case "W":
-                return "Turn";
-            case "S":
-                return "Wait";
-            case "J":
-                return "Attack";
-            default:
-                return "Wait";
+            case "A": return "MoveLeft";
+            case "D": return "MoveRight";
+            case "W": return "Turn";
+            case "S": return "Wait";
+            case "J": return "Attack";
+            default: return "Wait";
         }
     }
 
     public void UpdateHealthUI()
     {
-        if (player != null && enemy != null && UIManager.Instance != null)
+        if (player != null && enemies.Count > 0 && UIManager.Instance != null)
         {
             float playerHealth = player.GetHealth();
             float playerMaxHealth = player.GetMaxHealth();
-            float enemyHealth = enemy.GetHealth();
-            float enemyMaxHealth = enemy.GetMaxHealth();
-            UIManager.Instance.UpdateHealthBars(playerHealth, playerMaxHealth, enemyHealth, enemyMaxHealth);
+            UIManager.Instance.UpdatePlayerHealthBar(playerHealth, playerMaxHealth);
+            UIManager.Instance.UpdateEnemyHealthBars(enemies);
         }
     }
 
@@ -290,9 +282,30 @@ public class GameManager : MonoBehaviour
                 totalActionCount++;
                 UIManager.Instance.UpdateActionCount(action, actionCounts[action], totalActionCount);
                 UIManager.Instance.HighlightButton(action);
-
                 Debug.Log($"Chat command executed: {action}. Count: {actionCounts[action]}. Total actions: {totalActionCount}");
             }
         }
+    }
+
+    public void RemoveEnemy(EnemyController enemy)
+    {
+        enemies.Remove(enemy);
+        UIManager.Instance.UpdateEnemyHealthBars(enemies);
+        if (enemies.Count == 0)
+        {
+            TriggerVictory();
+        }
+    }
+
+    private void TriggerVictory()
+    {
+        Debug.Log("Victory! All enemies defeated.");
+        gameWinPanel.Show();
+    }
+
+    public void HandleEnemyConflict(EnemyController attacker, EnemyController victim, int damage)
+    {
+        Debug.Log($"Enemy conflict: {attacker.name} attacked {victim.name} for {damage} damage.");
+        // 这里可以添加额外的逻辑，比如更新UI、触发特殊事件等
     }
 }

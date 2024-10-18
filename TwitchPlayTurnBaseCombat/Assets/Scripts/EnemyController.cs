@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using UnityEngine.UI;
 
 public class EnemyController : MonoBehaviour
 {
@@ -16,6 +17,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private GameObject chargingIndicatorPrefab; 
     [SerializeField] private Vector3 indicatorOffset = new Vector3(0, 1, 0);
     [SerializeField] private Transform spriteTransform;
+    [SerializeField] private Slider healthBar;
 
     private GameObject currentChargingIndicator; 
     private Vector2Int gridPosition;
@@ -45,28 +47,86 @@ public class EnemyController : MonoBehaviour
         currentHealth = maxHealth;
         UpdatePosition();
         UpdateFacingDirection();
+        InitializeHealthBar();
     }
 
+    private void InitializeHealthBar()
+    {
+        if (healthBar == null)
+        {
+            healthBar = GetComponentInChildren<Slider>();
+        }
+
+        if (healthBar != null)
+        {
+            healthBar.maxValue = 1f;
+            healthBar.value = currentHealth;
+        }
+        else
+        {
+            Debug.LogWarning("Health bar not found for enemy: " + gameObject.name);
+        }
+    }
     public void PerformTurn()
     {
-        Vector2Int playerPosition = FindPlayerPosition();
-
         if (isCharging)
         {
             Attack();
         }
-        else if (!IsFacingPlayer(playerPosition))
-        {
-            TurnTowardsPlayer(playerPosition);
-        }
-        else if (IsPlayerInAttackRange(playerPosition))
-        {
-            StartCharging();
+        else if(CheckLineOfSight())
+        {  
+            Vector2Int playerPosition = FindPlayerPosition();
+
+            if (!IsFacingPlayer(playerPosition))
+            {
+                TurnTowardsPlayer(playerPosition);
+            }
+            else if (IsPlayerInAttackRange(playerPosition))
+            {
+                StartCharging();
+            }
+            else
+            {
+                MoveTowardsPlayer(playerPosition);
+            }
+
         }
         else
         {
-            MoveTowardsPlayer(playerPosition);
+            Wait();
         }
+    }
+
+    private bool CheckLineOfSight()
+    {
+        Vector2Int checkPosition = gridPosition;
+        Vector2Int playerPosition = FindPlayerPosition();
+
+        while (GridManager.Instance.IsValidGridPosition(checkPosition))
+        {
+            checkPosition += facingDirection;
+            GridManager.CellType cellType = GridManager.Instance.GetCellType(checkPosition);
+
+            if (cellType == GridManager.CellType.Player)
+            {
+                return true; // 视线中第一个遇到的是玩家
+            }
+            else if (cellType == GridManager.CellType.Enemy || cellType == GridManager.CellType.Obstacle)
+            {
+                // 如果视线被阻挡，尝试转向
+                TurnTowardsPlayer(playerPosition);
+                return false; // 视线被其他敌人或障碍物阻挡
+            }
+        }
+        // 如果没有检测到任何东西，也尝试转向
+        TurnTowardsPlayer(playerPosition);
+        return false;
+    }
+
+    private void Wait()
+    {
+        Debug.Log("Enemy is waiting this turn.");
+        // 可以在这里添加等待动画或其他视觉反馈
     }
 
     private Vector2Int FindPlayerPosition()
@@ -138,24 +198,53 @@ public class EnemyController : MonoBehaviour
         }
     }
 
-    private void Attack()//敌人攻击
+    private void Attack()
     {
         animator.SetTrigger("Attack");
         isCharging = false;
         RemoveChargingIndicator();
-        SetNormalSprite(); // 攻击后恢复正常 sprite
+        SetNormalSprite();
 
-        PlayerController player = FindObjectOfType<PlayerController>();
-        if (player != null && IsPlayerInAttackRange(player.GetGridPosition()))
+        Vector2Int attackPosition = gridPosition + facingDirection;
+        GridManager.CellType targetCellType = GridManager.Instance.GetCellType(attackPosition);
+
+        if (targetCellType == GridManager.CellType.Player)
         {
-            int damage = type == EnemyType.Sword ? swordDamage : spearDamage;
-            Debug.Log($"Enemy attacked player for {damage} damage!");
-            player.TakeDamage(damage);
+            PlayerController player = FindObjectOfType<PlayerController>();
+            if (player != null && player.GetGridPosition() == attackPosition)
+            {
+                int damage = type == EnemyType.Sword ? swordDamage : spearDamage;
+                Debug.Log($"Enemy attacked player for {damage} damage!");
+                player.TakeDamage(damage);
+            }
+        }
+        else if (targetCellType == GridManager.CellType.Enemy)
+        {
+            EnemyController targetEnemy = FindEnemyAt(attackPosition);
+            if (targetEnemy != null)
+            {
+                int damage = type == EnemyType.Sword ? swordDamage : spearDamage;
+                Debug.Log($"Enemy attacked another enemy for {damage} damage!");
+                targetEnemy.TakeDamage(damage);
+            }
         }
         else
         {
-            Debug.Log("Player is not in attack range. Attack missed!");
+            Debug.Log("Attack missed! No valid target in range.");
         }
+    }
+
+    private EnemyController FindEnemyAt(Vector2Int position)
+    {
+        EnemyController[] enemies = FindObjectsOfType<EnemyController>();
+        foreach (var enemy in enemies)
+        {
+            if (enemy != this && enemy.GetGridPosition() == position)
+            {
+                return enemy;
+            }
+        }
+        return null;
     }
 
     private void RemoveChargingIndicator()
@@ -248,10 +337,18 @@ public class EnemyController : MonoBehaviour
     public void TakeDamage(int damage)
     {
         currentHealth = Mathf.Max(0, currentHealth - damage);
+        UpdateHealthBar();
         if (currentHealth <= 0)
         {
-            currentHealth = Mathf.Max(0, currentHealth - damage);
             Die();
+        }
+    }
+
+    private void UpdateHealthBar()
+    {
+        if (healthBar != null)
+        {
+            healthBar.value = currentHealth;
         }
     }
 
@@ -259,8 +356,11 @@ public class EnemyController : MonoBehaviour
     {
         Debug.Log("Enemy has died!");
         RemoveChargingIndicator();
-        SetNormalSprite(); // 确保在死亡时恢复正常 sprite
+        SetNormalSprite();
         GridManager.Instance.SetCellType(gridPosition, GridManager.CellType.Empty);
+
+        // 通知GameManager移除这个敌人
+        GameManager.Instance.RemoveEnemy(this);
 
         // 播放死亡动画
         StartCoroutine(PlayDeathAnimation());
@@ -268,23 +368,20 @@ public class EnemyController : MonoBehaviour
 
     private IEnumerator PlayDeathAnimation()
     {
-        // 禁用敌人的其他行为（如果有的话）
-
         if (animator != null)
         {
             animator.SetTrigger("Die");
-
-            // 等待动画播放完毕
             yield return new WaitForSeconds(deathAnimationDuration);
         }
         else
         {
             Debug.LogWarning("Animator component is missing on the enemy!");
-            yield return new WaitForSeconds(0.5f); 
+            yield return new WaitForSeconds(0.5f);
         }
 
         Destroy(gameObject);
     }
+
 
     public float GetHealth() => currentHealth;
     public float GetMaxHealth() => maxHealth;

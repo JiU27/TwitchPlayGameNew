@@ -9,15 +9,13 @@ public class UIManager : MonoBehaviour
     public static UIManager Instance;
 
     [SerializeField] private Slider playerHealthBar;
-    [SerializeField] private Slider enemyHealthBar;
     [SerializeField] private TextMeshProUGUI attackCooldownText;
     [SerializeField] private TextMeshProUGUI switchCooldownText;
     [SerializeField] private TextMeshProUGUI turnCountdownText;
     [SerializeField] private GameObject actionPanel;
     [SerializeField] private Button[] actionButtons;
-    [SerializeField] private Slider[] actionCountSliders; // New array for sliders
+    [SerializeField] private Slider[] actionCountSliders;
     [SerializeField] private ActionResultPanel actionResultPanel;
-
 
     private Dictionary<string, Slider> actionSliderMap = new Dictionary<string, Slider>();
     private int totalActionCount = 0;
@@ -44,15 +42,28 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    public void UpdateHealthBars(float playerHealth, float playerMaxHealth, float enemyHealth, float enemyMaxHealth)
+    public void UpdatePlayerHealthBar(float playerHealth, float playerMaxHealth)
     {
         if (playerHealthBar != null)
         {
             playerHealthBar.value = playerHealth / playerMaxHealth;
         }
-        if (enemyHealthBar != null)
+    }
+
+    public void UpdateEnemyHealthBars(List<EnemyController> enemies)
+    {
+        foreach (var enemy in enemies)
         {
-            enemyHealthBar.value = enemyHealth / enemyMaxHealth;
+            UpdateEnemyHealthBar(enemy);
+        }
+    }
+
+    private void UpdateEnemyHealthBar(EnemyController enemy)
+    {
+        Slider healthBar = enemy.GetComponentInChildren<Slider>();
+        if (healthBar != null)
+        {
+            healthBar.value = enemy.GetHealth() / enemy.GetMaxHealth();
         }
     }
 
@@ -83,16 +94,13 @@ public class UIManager : MonoBehaviour
 
     public void UpdateActionCount(string action, int count, int totalCount)
     {
-        // First, update the max value for all sliders
         UpdateSliderMaxValues(totalCount);
 
-        // Then, update the value for the specific action
         if (actionSliderMap.TryGetValue(action, out Slider slider))
         {
             slider.value = count;
         }
 
-        // Debug information
         Debug.Log($"Action {action} pressed. Count: {count}. Total actions: {totalCount}");
     }
 
@@ -102,14 +110,6 @@ public class UIManager : MonoBehaviour
         foreach (var slider in actionCountSliders)
         {
             slider.maxValue = maxValue;
-        }
-    }
-
-    private void UpdateSliderMaxValues()
-    {
-        foreach (var slider in actionCountSliders)
-        {
-            slider.maxValue = Mathf.Max(1, totalActionCount);
         }
     }
 
