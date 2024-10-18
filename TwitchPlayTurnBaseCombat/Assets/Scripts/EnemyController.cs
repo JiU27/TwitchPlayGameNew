@@ -19,11 +19,16 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Transform spriteTransform;
     [SerializeField] private Slider healthBar;
 
+    public GameObject particleEffectPrefab;
+    public Transform spawnPosition;
+
     private GameObject currentChargingIndicator; 
     private Vector2Int gridPosition;
     private Vector2Int facingDirection;
     public bool isCharging = false;
     private int currentHealth;
+
+    public AudioSource enemy_hurt;
 
     //[SerializeField] private Sprite normalSprite;
     //[SerializeField] private Sprite chargingSprite;
@@ -338,11 +343,22 @@ public class EnemyController : MonoBehaviour
 
     public void TakeDamage(int damage, bool playerFacingRight = false)
     {
+        GameObject particleInstance = Instantiate(particleEffectPrefab, spawnPosition.position, spawnPosition.rotation);
+
+        ParticleSystem particleSystem = particleInstance.GetComponent<ParticleSystem>();
+        if (particleSystem != null)
+        {
+            particleSystem.Play();
+        }
+        Destroy(particleInstance, particleSystem.main.duration);
+
         currentHealth = Mathf.Max(0, currentHealth - damage);
         UpdateHealthBar();
 
-        // 如果是玩家造成的伤害，使用 playerFacingRight
-        // 如果是敌人造成的伤害，我们不使用屏幕旋转效果
+
+        enemy_hurt.Play();
+
+
         if (playerFacingRight)
         {
             EffectsManager.Instance.PlayEnemyDamageEffects(transform.position, playerFacingRight);
@@ -374,10 +390,8 @@ public class EnemyController : MonoBehaviour
         SetNormalSprite();
         GridManager.Instance.SetCellType(gridPosition, GridManager.CellType.Empty);
 
-        // 通知GameManager移除这个敌人
         GameManager.Instance.RemoveEnemy(this);
 
-        // 播放死亡动画
         StartCoroutine(PlayDeathAnimation());
     }
 
@@ -413,7 +427,7 @@ public class EnemyController : MonoBehaviour
     public void UpdatePositionAndDirection(Vector2Int newPosition, Vector2Int newFacingDirection)
     {
         StartCoroutine(SwitchPositionAnimation(newPosition, newFacingDirection));
-        SetNormalSprite(); // 确保在位置更新后恢复正常 sprite
+        SetNormalSprite(); 
     }
 
     private IEnumerator SwitchPositionAnimation(Vector2Int newPosition, Vector2Int newFacingDirection)
@@ -422,13 +436,10 @@ public class EnemyController : MonoBehaviour
         Vector3 targetPosition = GridManager.Instance.GridToWorldPosition(newPosition);
         Vector3 midPoint = (startPosition + targetPosition) / 2;
 
-        // 移动到中间点
         yield return StartCoroutine(MoveToPosition(midPoint));
 
-        // 移动到最终位置
         yield return StartCoroutine(MoveToPosition(targetPosition));
 
-        // 更新位置和方向
         SetPosition(newPosition);
         facingDirection = newFacingDirection;
         UpdateFacingDirection();
