@@ -77,57 +77,26 @@ public class Twitch_Manager : MonoBehaviour
 
         if (Twitch.Available > 0)
         {
-            //if something is available in the TCP that we can grab with the stream reader
-            string message = Reader.ReadLine(); //reads the next available line in our TCP
+            string message = Reader.ReadLine();
 
-            if (message.Contains("PRIVMSG"))    //code that will come with any message that's written by a user
+            if (message.Contains("PRIVMSG"))
             {
-                //so this comment below here is all the info that's sent in a message... it's a lot so we have to parse it.
-                // :soomoh!soomoh@soomoh.tmi.twitch.tv PRIVMSG #soomoh :hello world
+                int splitPoint = message.IndexOf("!");
+                string chatter = message.Substring(1, splitPoint - 1);
 
+                splitPoint = message.IndexOf(":", 1);
+                string msg = message.Substring(splitPoint + 1);
 
-                int splitPoint = message.IndexOf("!");  //notice the '!' in front of the message - we can use this '!' to isolate the username
-                string chatter = message.Substring(1, splitPoint - 1);  //extracts the first word... in this case, 'soomoh'
-                                                                        //aka the person speaking
+                // Add exclamation mark to messages that are not already prefixed
+                if (!msg.StartsWith("!"))
+                {
+                    msg = "!" + msg;
+                }
 
-                splitPoint = message.IndexOf(":", 1);   //so everything after that colon is the message that the user typed... in this case, 'hello world'
-                string msg = message.Substring(splitPoint + 1);    //anything that's passed that colon, bring it in to that string
-
-                //This UnityEvent is what will look at the messager, and their message - then it will invoke a method from another script that we assign! 
-                //You can assign the method it invokes in the inspector.
-                OnChatMessage?.Invoke(chatter, msg);    //side note - 'Invoke' is a method that calls another method.
-
-
-                //now you can simply put a series of if statements in the method that you assign to the UnityEvent... 
-                //if msg == "A", do something... 
-                //if msg == "B", do something...
-                //etc, etc
+                // Invoke the event to handle the chat message
+                OnChatMessage?.Invoke(chatter, msg);
 
                 print(msg);
-
-                //if(msg == "a")
-                //{
-                //    Debug.Log("someone pressed A");
-                //    GameObject.FindObjectOfType<GameManager>().GetComponent<GameManager>().A_Pressed();
-                //}
-
-                //if (msg == "d")
-                //{
-                //    Debug.Log("someone pressed D");
-                //    GameObject.FindObjectOfType<GameManager>().GetComponent<GameManager>().D_Pressed();
-                //}
-
-                //if (msg == "w")
-                //{
-                //    Debug.Log("someone pressed W");
-                //    GameObject.FindObjectOfType<GameManager>().GetComponent<GameManager>().W_Pressed();
-                //}
-
-                //if (msg == "s")
-                //{
-                //    Debug.Log("someone pressed S");
-                //    GameObject.FindObjectOfType<GameManager>().GetComponent<GameManager>().S_Pressed();
-                //}
             }
         }
     }

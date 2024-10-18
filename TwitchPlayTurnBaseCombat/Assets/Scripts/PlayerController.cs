@@ -14,6 +14,9 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private GameOverPanel gameOverPanel;
     [SerializeField] private Transform spriteTransform;
 
+    public GameObject particleEffectPrefab;
+    public Transform spawnPosition;
+
     private Vector2Int gridPosition;
     private Vector2Int facingDirection;
     private int currentAttackCooldown = 0;
@@ -21,6 +24,8 @@ public class PlayerController : MonoBehaviour
     private int currentHealth;
 
     private SpriteRenderer spriteRenderer;
+
+    public AudioSource player_hurt;
 
     [SerializeField] private float switchAnimationDuration = 0.5f;
 
@@ -199,33 +204,26 @@ public class PlayerController : MonoBehaviour
 
     private IEnumerator SwitchPositionAnimation(EnemyController enemy, Vector2Int playerOldPosition, Vector2Int enemyOldPosition)
     {
-        // 触发交换位置动画
         if (animator != null)
         {
             animator.SetTrigger("Switch");
         }
 
-        // 计算中间点
         Vector3 midPoint = (GridManager.Instance.GridToWorldPosition(playerOldPosition) +
                             GridManager.Instance.GridToWorldPosition(enemyOldPosition)) / 2;
 
-        // 玩家移动到中间点
         yield return StartCoroutine(MoveToPosition(midPoint));
 
-        // 更新网格位置
         gridPosition = enemyOldPosition;
         enemy.SetPosition(playerOldPosition);
 
         GridManager.Instance.SetCellType(playerOldPosition, GridManager.CellType.Enemy);
         GridManager.Instance.SetCellType(enemyOldPosition, GridManager.CellType.Player);
 
-        // 玩家从中间点移动到最终位置
         yield return StartCoroutine(MoveToPosition(GridManager.Instance.GridToWorldPosition(gridPosition)));
 
-        // 敌人更新位置和方向
         enemy.UpdatePositionAndDirection(playerOldPosition, enemy.GetFacingDirection());
 
-        // 对敌人造成伤害
         //enemy.TakeDamage(attackDamage / 2);
 
         UpdatePosition();
@@ -291,10 +289,19 @@ public class PlayerController : MonoBehaviour
 
     public void TakeDamage(int damage)
     {
+        player_hurt.Play();
+        GameObject particleInstance = Instantiate(particleEffectPrefab, spawnPosition.position, spawnPosition.rotation);
+
+        ParticleSystem particleSystem = particleInstance.GetComponent<ParticleSystem>();
+        if (particleSystem != null)
+        {
+            particleSystem.Play();
+        }
+        Destroy(particleInstance, particleSystem.main.duration);
+
         currentHealth = Mathf.Max(0, currentHealth - damage);
         GameManager.Instance.UpdateHealthUI();
 
-        // 播放玩家受伤效果
         EffectsManager.Instance.PlayPlayerDamageEffects(transform.position);
 
         if (currentHealth <= 0)
