@@ -300,6 +300,12 @@ public class GameManager : MonoBehaviour
     private void TriggerVictory()
     {
         Debug.Log("Victory! All enemies defeated.");
+        StartCoroutine(ShowVictoryPanelWithDelay(1.5f));
+    }
+
+    private IEnumerator ShowVictoryPanelWithDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
         gameWinPanel.Show();
     }
 

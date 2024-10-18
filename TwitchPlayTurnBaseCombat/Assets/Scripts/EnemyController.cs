@@ -225,7 +225,9 @@ public class EnemyController : MonoBehaviour
             {
                 int damage = type == EnemyType.Sword ? swordDamage : spearDamage;
                 Debug.Log($"Enemy attacked another enemy for {damage} damage!");
-                targetEnemy.TakeDamage(damage);
+                // 修改这里，传入 false 作为 playerFacingRight 参数
+                // 因为这是敌人攻击敌人，所以我们不需要考虑玩家朝向
+                targetEnemy.TakeDamage(damage, false);
             }
         }
         else
@@ -334,12 +336,25 @@ public class EnemyController : MonoBehaviour
         }
     }
 
-    public void TakeDamage(int damage)
+    public void TakeDamage(int damage, bool playerFacingRight = false)
     {
         currentHealth = Mathf.Max(0, currentHealth - damage);
         UpdateHealthBar();
+
+        // 如果是玩家造成的伤害，使用 playerFacingRight
+        // 如果是敌人造成的伤害，我们不使用屏幕旋转效果
+        if (playerFacingRight)
+        {
+            EffectsManager.Instance.PlayEnemyDamageEffects(transform.position, playerFacingRight);
+        }
+        else
+        {
+            EffectsManager.Instance.PlayPlayerDamageEffects(transform.position);
+        }
+
         if (currentHealth <= 0)
         {
+            currentHealth = Mathf.Max(0, currentHealth - damage);
             Die();
         }
     }

@@ -293,12 +293,21 @@ public class PlayerController : MonoBehaviour
     {
         currentHealth = Mathf.Max(0, currentHealth - damage);
         GameManager.Instance.UpdateHealthUI();
+
+        // 播放玩家受伤效果
+        EffectsManager.Instance.PlayPlayerDamageEffects(transform.position);
+
         if (currentHealth <= 0)
         {
-            currentHealth = Mathf.Max(0, currentHealth - damage);
-            GameManager.Instance.UpdateHealthUI();
             Die();
         }
+    }
+
+    // 在PlayerController类中添加此方法
+    public void DealDamage(EnemyController enemy, int damage)
+    {
+        bool isFacingRight = facingDirection.x > 0;
+        enemy.TakeDamage(damage, isFacingRight);
     }
 
     private void Die()
